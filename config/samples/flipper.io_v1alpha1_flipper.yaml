@@ -1,0 +1,9 @@
+apiVersion: flipper.io.github.com/v1alpha1
+kind: Flipper
+metadata:
+  labels:
+    app.kubernetes.io/name: rollout-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: flipper-sample
+spec:
+  # TODO(user): Add fields here
