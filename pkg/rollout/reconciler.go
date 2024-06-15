@@ -24,7 +24,7 @@ type Reconciler struct {
 const (
 	matchLabel      = "mesh"
 	matchValue      = "true"
-	requeueInterval = 1 * time.Minute
+	requeueInterval = 5 * time.Minute
 )
 
 // +kubebuilder:rbac:groups=apps.v1,resources=deployment,verbs=get;list;watch;create;update;patch
@@ -54,6 +54,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	logger.Info("doing rollout restart for deployment...")
+	objCopy := depl.DeepCopy()
+
+	if objCopy.Spec.Template.ObjectMeta.Annotations == nil {
+		objCopy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+	}
+	objCopy.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	err = r.Patch(ctx, objCopy, client.MergeFrom(&depl))
+	if err != nil {
+		logger.Error(err, "error patching the deployment")
+		return ctrl.Result{}, err
+	}
 
 	// TODO(user): your logic here
 	return ctrl.Result{RequeueAfter: requeueInterval}, nil
