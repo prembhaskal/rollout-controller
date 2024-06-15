@@ -37,6 +37,7 @@ import (
 	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
 	"github.com/prembhaskal/rollout-controller/internal/controller"
 	// +kubebuilder:scaffold:imports
+	"github.com/prembhaskal/rollout-controller/pkg/rollout"
 )
 
 var (
@@ -131,6 +132,13 @@ func main() {
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
+
+	if err = (&rollout.Reconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create rollout controller", "controller", "Rollout")
+		os.Exit(1)
+	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
