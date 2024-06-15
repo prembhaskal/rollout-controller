@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"time"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -28,8 +29,14 @@ type FlipperSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Flipper. Edit flipper_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Interval time.Duration `json:"interval,omitempty"`
+	Match    MatchSpec     `json:"match,omitempty"`
+}
+
+// MatchSpec defines specification of the deployment to be matched
+type MatchSpec struct {
+	Labels    map[string]string `json:"labels,omitempty"`
+	Namespace string            `json:"namespace,omitempty"`
 }
 
 // FlipperStatus defines the observed state of Flipper
