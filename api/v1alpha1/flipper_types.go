@@ -28,6 +28,7 @@ type FlipperSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// +kubebuilder:validation:Format=duration
 	Interval metav1.Duration `json:"interval,omitempty"`
 	Match    MatchSpec       `json:"match,omitempty"`
 }

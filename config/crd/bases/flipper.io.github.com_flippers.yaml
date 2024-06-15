@@ -40,6 +40,7 @@ spec:
             description: FlipperSpec defines the desired state of Flipper
             properties:
               interval:
+                format: duration
                 type: string
               match:
                 description: MatchSpec defines specification of the deployment to
