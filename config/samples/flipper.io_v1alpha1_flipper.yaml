@@ -6,4 +6,8 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: flipper-sample
 spec:
-  # TODO(user): Add fields here
+  interval: 12h
+  match:
+    labels:
+      mesh: "true"
+    namespace: "mesh"

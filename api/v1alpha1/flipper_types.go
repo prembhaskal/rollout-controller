@@ -29,8 +29,8 @@ type FlipperSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Interval time.Duration `json:"interval,omitempty"`
-	Match    MatchSpec     `json:"match,omitempty"`
+	Interval metav1.Duration `json:"interval,omitempty"`
+	Match    MatchSpec       `json:"match,omitempty"`
 }
 
 // MatchSpec defines specification of the deployment to be matched
