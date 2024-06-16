@@ -27,12 +27,6 @@ type Reconciler struct {
 	matchCriteria *config.MatchCriteria
 }
 
-// const (
-// 	matchLabel      = "mesh"
-// 	matchValue      = "true"
-// 	requeueInterval = 5 * time.Minute
-// )
-
 func New(client client.Client, matchCriteria *config.MatchCriteria) *Reconciler {
 	return &Reconciler{
 		Client:        client,
@@ -67,6 +61,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		logger.Info("ignoring non matching deployment")
 		return ctrl.Result{}, nil
 	}
+
 	restartTime := time.Now()
 	restartNeeeded, nextInterval, err := r.isRestartNeeded(logger, obj, restartTime, cfg.Interval)
 	if err != nil {
@@ -78,23 +73,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	logger.Info("doing rollout restart for deployment...")
-
-	objCopy := obj.DeepCopy()
-	if objCopy.Spec.Template.ObjectMeta.Annotations == nil {
-		objCopy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
-	}
-	objCopy.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = restartTime.Format(time.RFC3339)
-
-	err = r.Patch(ctx, objCopy, client.MergeFrom(obj))
+	err = r.triggerRollout(ctx, obj, restartTime)
 	if err != nil {
 		logger.Error(err, "error patching the deployment")
 		return ctrl.Result{}, err
 	}
 
-	// TODO(user): your logic here
 	return ctrl.Result{RequeueAfter: cfg.Interval}, nil
 }
 
+func (r *Reconciler) triggerRollout(ctx context.Context, obj *appsv1.Deployment, restartTime time.Time) error {
+	objCopy := obj.DeepCopy()
+	if objCopy.Spec.Template.ObjectMeta.Annotations == nil {
+		objCopy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+	}
+	objCopy.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = restartTime.Format(time.RFC3339)
+	return r.Patch(ctx, objCopy, client.MergeFrom(obj))
+}
+
+// return true if restart needed
+// return false with error if issue finding previous restart time
+// returns false and interval after which restart to be triggered
 func (r *Reconciler) isRestartNeeded(logger logr.Logger, obj *appsv1.Deployment, restartTime time.Time, restartInterval time.Duration) (bool, time.Duration, error) {
 	if obj.Spec.Template.ObjectMeta.Annotations == nil {
 		return true, 0, nil
@@ -109,12 +108,12 @@ func (r *Reconciler) isRestartNeeded(logger logr.Logger, obj *appsv1.Deployment,
 		return false, 0, err
 	}
 	if restartTime.Before(lastRestarted) {
-		// can this happen, like if someone edits deployment incorrectly
-		logger.Info("error last Restart time is in future", "lastRestart", lastRestarted, "newRestart", restartTime)
+		// this can happen if someone manually edits deployment incorrectly
+		logger.Info("error: last restart time is in future", "lastRestart", lastRestarted, "newRestart", restartTime)
 		return false, 0, err
 	}
 	nextRestartInterval := restartInterval - restartTime.Sub(lastRestarted)
-	// lastRestart + restartInterval < newRestartTime <- match this condition for restart
+	// lastRestart + restartInterval < newRestartTime <-- match this condition for restart
 	return lastRestarted.Add(restartInterval).Before(restartTime), nextRestartInterval, nil
 }
 
@@ -132,7 +131,8 @@ func (r *Reconciler) matchesCriteria(obj *appsv1.Deployment, cfg config.FlipperC
 func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, obj client.Object) []reconcile.Request {
 	logger := log.FromContext(ctx)
 
-	// TODO error in this method won't cause requeue, but chances of errors are less since it will be using cached clients for IO.
+	// TODO error in this method won't cause requeue,
+	// but chances of errors are less since it will be using cached clients.
 	var allDepls appsv1.DeploymentList
 	err := r.List(ctx, &allDepls)
 	if err != nil {

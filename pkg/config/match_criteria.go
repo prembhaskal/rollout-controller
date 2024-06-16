@@ -25,17 +25,10 @@ func (f FlipperConfig) String() string {
 		f.MatchLabel, f.MatchValue, f.Interval.String(), f.Namespace)
 }
 
-//	var defaultSpec = flipperiov1alpha1.FlipperSpec{
-//		Interval: v1.Duration{Duration: 10 * time.Minute},
-//		Match: flipperiov1alpha1.MatchSpec{
-//			Labels:    map[string]string{"mesh": "true"},
-//			Namespace: "",
-//		},
-//	}
 var defaultConfig = FlipperConfig{
 	MatchLabel: "mesh",
 	MatchValue: "true",
-	Interval:   5 * time.Minute,
+	Interval:   10 * time.Minute,
 	Namespace:  "",
 }
 
