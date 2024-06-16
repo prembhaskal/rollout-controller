@@ -19,7 +19,7 @@ package flipper
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	// "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -62,20 +62,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logger.Info("In Reconcile method")
 
 	// TODO(user): your logic here
-	obj := &flipperiov1alpha1.Flipper{}
-	err := r.Get(ctx, req.NamespacedName, obj)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("flipper config deleted")
-			r.matchCriteria.DeleteConfig()
-			return ctrl.Result{}, nil
-		}
-		logger.Error(err, "error fetching the flipper config")
-		return ctrl.Result{}, err
-	}
+	// obj := &flipperiov1alpha1.Flipper{}
+	// err := r.Get(ctx, req.NamespacedName, obj)
+	// if err != nil {
+	// 	if errors.IsNotFound(err) {
+	// 		logger.Info("flipper config deleted")
+	// 		r.matchCriteria.DeleteConfig()
+	// 		return ctrl.Result{}, nil
+	// 	}
+	// 	logger.Error(err, "error fetching the flipper config")
+	// 	return ctrl.Result{}, err
+	// }
 
-	logger.Info("updating matching criteria", "criteria", obj.Spec)
-	r.matchCriteria.UpdateConfig(obj)
+	// logger.Info("updating matching criteria", "criteria", obj.Spec)
+	// r.matchCriteria.UpdateConfig(obj)
 
 	return ctrl.Result{}, nil
 }

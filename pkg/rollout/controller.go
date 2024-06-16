@@ -4,7 +4,9 @@ import (
 	"context"
 	"time"
 
+	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
 	"github.com/prembhaskal/rollout-controller/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -14,6 +16,7 @@ import (
 
 	corev1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var _ reconcile.Reconciler = &Reconciler{}
@@ -93,11 +96,53 @@ func (r *Reconciler) matchesCriteria(obj *corev1.Deployment, cfg config.FlipperC
 	return true
 }
 
+func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, obj client.Object) []reconcile.Request {
+	logger := log.FromContext(ctx)
+
+	// TODO error in this method won't cause requeue, but chances of errors are less since it will be using cached clients for IO.
+	var allDepls corev1.DeploymentList
+	err := r.List(ctx, &allDepls)
+	if err != nil {
+		logger.Error(err, "error in listing deployments")
+		return nil
+	}
+	requests := make([]reconcile.Request, 0)
+	for _, depl := range allDepls.Items {
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      depl.Name,
+				Namespace: depl.Namespace,
+			},
+		})
+	}
+
+	nsName := types.NamespacedName{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}
+	var flipper flipperiov1alpha1.Flipper
+	err = r.Get(ctx, nsName, &flipper)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("deleted matching criteria config")
+			r.matchCriteria.DeleteConfig()
+			return requests
+		}
+		logger.Error(err, "error in getting flipper configuration") // TODO this will never recover
+		return nil
+	}
+
+	logger.Info("updated matching criteria", "flipper", flipper)
+	r.matchCriteria.UpdateConfig(&flipper)
+	return requests
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Deployment{}).
 		Named("rolloutController").
+		Watches(&flipperiov1alpha1.Flipper{}, handler.EnqueueRequestsFromMapFunc(r.enqueueDeploymentsForCriteriaChange)).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
