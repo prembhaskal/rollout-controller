@@ -10,4 +10,4 @@ spec:
   match:
     labels:
       mesh: "true"
-    namespace: "mesh"
+    namespace: ""

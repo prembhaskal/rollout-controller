@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-logr/logr"
 	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
 	"github.com/prembhaskal/rollout-controller/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -14,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	corev1 "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -48,7 +49,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logger := log.FromContext(ctx)
 	logger.V(2).Info("In Reconcile method")
 
-	obj := &corev1.Deployment{}
+	obj := &appsv1.Deployment{}
 	err := r.Get(ctx, req.NamespacedName, obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -66,6 +67,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		logger.Info("ignoring non matching deployment")
 		return ctrl.Result{}, nil
 	}
+	restartTime := time.Now()
+	restartNeeeded, nextInterval, err := r.isRestartNeeded(logger, obj, restartTime, cfg.Interval)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if !restartNeeeded {
+		logger.Info("skipping deployment as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
+		return ctrl.Result{RequeueAfter: nextInterval}, nil
+	}
 
 	logger.Info("doing rollout restart for deployment...")
 
@@ -73,7 +83,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if objCopy.Spec.Template.ObjectMeta.Annotations == nil {
 		objCopy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
 	}
-	objCopy.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+	objCopy.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = restartTime.Format(time.RFC3339)
 
 	err = r.Patch(ctx, objCopy, client.MergeFrom(obj))
 	if err != nil {
@@ -85,9 +95,32 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{RequeueAfter: cfg.Interval}, nil
 }
 
+func (r *Reconciler) isRestartNeeded(logger logr.Logger, obj *appsv1.Deployment, restartTime time.Time, restartInterval time.Duration) (bool, time.Duration, error) {
+	if obj.Spec.Template.ObjectMeta.Annotations == nil {
+		return true, 0, nil
+	}
+	lastRestartedStr := obj.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"]
+	if lastRestartedStr == "" {
+		return true, 0, nil
+	}
+	lastRestarted, err := time.Parse(time.RFC3339, lastRestartedStr)
+	if err != nil {
+		logger.Error(err, "error parsing last restart time from deployment", "lastRestarted", lastRestarted)
+		return false, 0, err
+	}
+	if restartTime.Before(lastRestarted) {
+		// can this happen, like if someone edits deployment incorrectly
+		logger.Info("error last Restart time is in future", "lastRestart", lastRestarted, "newRestart", restartTime)
+		return false, 0, err
+	}
+	nextRestartInterval := restartInterval - restartTime.Sub(lastRestarted)
+	// lastRestart + restartInterval < newRestartTime <- match this condition for restart
+	return lastRestarted.Add(restartInterval).Before(restartTime), nextRestartInterval, nil
+}
+
 // check if obj matches the needed label and namespace
-func (r *Reconciler) matchesCriteria(obj *corev1.Deployment, cfg config.FlipperConfig) bool {
-	if obj.Spec.Template.Labels[cfg.MatchLabel] != cfg.MatchValue {
+func (r *Reconciler) matchesCriteria(obj *appsv1.Deployment, cfg config.FlipperConfig) bool {
+	if obj.Labels[cfg.MatchLabel] != cfg.MatchValue {
 		return false
 	}
 	if cfg.Namespace != "" && cfg.Namespace != obj.Namespace {
@@ -100,7 +133,7 @@ func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, ob
 	logger := log.FromContext(ctx)
 
 	// TODO error in this method won't cause requeue, but chances of errors are less since it will be using cached clients for IO.
-	var allDepls corev1.DeploymentList
+	var allDepls appsv1.DeploymentList
 	err := r.List(ctx, &allDepls)
 	if err != nil {
 		logger.Error(err, "error in listing deployments")
@@ -140,7 +173,7 @@ func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, ob
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1.Deployment{}).
+		For(&appsv1.Deployment{}).
 		Named("rolloutController").
 		Watches(&flipperiov1alpha1.Flipper{}, handler.EnqueueRequestsFromMapFunc(r.enqueueDeploymentsForCriteriaChange)).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
