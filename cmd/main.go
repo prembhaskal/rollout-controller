@@ -35,8 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
-	"github.com/prembhaskal/rollout-controller/internal/controller"
 	// +kubebuilder:scaffold:imports
+	"github.com/prembhaskal/rollout-controller/pkg/config"
+	"github.com/prembhaskal/rollout-controller/pkg/flipper"
 	"github.com/prembhaskal/rollout-controller/pkg/rollout"
 )
 
@@ -124,18 +125,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.FlipperReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	matchCriteria := &config.MatchCriteria{}
+
+	flipperReconciler := flipper.New(mgr.GetClient(), mgr.GetScheme(), matchCriteria)
+	if err = flipperReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Flipper")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
-	if err = (&rollout.Reconciler{
-		Client: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
+	rolloutReconciler := rollout.New(mgr.GetClient(), matchCriteria)
+	if err = rolloutReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create rollout controller", "controller", "Rollout")
 		os.Exit(1)
 	}

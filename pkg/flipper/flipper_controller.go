@@ -14,23 +14,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package flipper
 
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
+	"github.com/prembhaskal/rollout-controller/pkg/config"
 )
 
-// FlipperReconciler reconciles a Flipper object
-type FlipperReconciler struct {
+// Reconciler reconciles a Flipper object
+type Reconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	scheme        *runtime.Scheme
+	matchCriteria *config.MatchCriteria
+}
+
+func New(client client.Client, scheme *runtime.Scheme, matchCriteria *config.MatchCriteria) *Reconciler {
+	return &Reconciler{
+		Client:        client,
+		scheme:        scheme,
+		matchCriteria: matchCriteria,
+	}
 }
 
 // +kubebuilder:rbac:groups=flipper.io.github.com,resources=flippers,verbs=get;list;watch;create;update;patch;delete
@@ -46,17 +57,31 @@ type FlipperReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.18.2/pkg/reconcile
-func (r *FlipperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("In Reconcile method")
 
 	// TODO(user): your logic here
+	obj := &flipperiov1alpha1.Flipper{}
+	err := r.Get(ctx, req.NamespacedName, obj)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("flipper config deleted")
+			r.matchCriteria.DeleteConfig()
+			return ctrl.Result{}, nil
+		}
+		logger.Error(err, "error fetching the flipper config")
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("updating matching criteria", "criteria", obj.Spec)
+	r.matchCriteria.UpdateConfig(obj)
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *FlipperReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&flipperiov1alpha1.Flipper{}).
 		Complete(r)

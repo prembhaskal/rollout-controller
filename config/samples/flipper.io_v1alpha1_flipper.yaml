@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: flipper-sample
 spec:
-  interval: 12h
+  interval: 2m
   match:
     labels:
       mesh: "true"
-    namespace: "mesh"
+    namespace: ""

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package flipper
 
 import (
 	"context"
@@ -68,9 +68,9 @@ var _ = Describe("Flipper Controller", func() {
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &FlipperReconciler{
+			controllerReconciler := &Reconciler{
 				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				scheme: k8sClient.Scheme(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
