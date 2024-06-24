@@ -63,11 +63,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	restartTime := time.Now()
-	restartNeeeded, nextInterval, err := r.isRestartNeeded(logger, obj, restartTime, cfg.Interval)
+	restartNeeded, nextInterval, err := r.isRestartNeeded(logger, obj, restartTime, cfg.Interval)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if !restartNeeeded {
+	if !restartNeeded {
 		logger.Info("skipping deployment as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
 		return ctrl.Result{RequeueAfter: nextInterval}, nil
 	}
