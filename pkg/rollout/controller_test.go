@@ -119,14 +119,66 @@ func TestReconcilerIgnoreNotMatchingLabel(t *testing.T) {
 	err = client.Get(ctx, nsName, &obj)
 	require.NoError(t, err)
 
-	annotations := obj.Spec.Template.Annotations
-	
-	require.NotNil(t, annotations)
-	restartedAt := annotations["kubectl.kubernetes.io/restartedAt"]
-	require.Empty(t, restartedAt)
+	require.Empty(t, getRestartAtTime(&obj))
+	require.Equal(t, result.RequeueAfter, time.Duration(0))
+}
 
-	_, err = time.Parse(time.RFC3339, restartedAt)
+func TestReconcilerIgnoreNotExistingDeployment(t *testing.T) {
+	ctx := context.Background()
+	// setup fake client with needed parameters
+	client := createFakeClient()
+	// setup default match criteria (or read from somewhere)
+	matchCriteria := &config.MatchCriteria{}
+	reconciler := rollout.New(client, matchCriteria)
+
+	nsName := types.NamespacedName{
+		Namespace: "default",
+		Name:      "removed",
+	}
+	req := ctrl.Request{
+		NamespacedName: nsName,
+	}
+
+	result, err := reconciler.Reconcile(ctx, req)
 	require.NoError(t, err)
 
-	require.Equal(t, result.RequeueAfter, matchCriteria.Config().Interval)
+	require.Equal(t, result.RequeueAfter, time.Duration(0))
+}
+
+func TestReconcilerIgnoreDeploymentInDeletingState(t *testing.T) {
+	ctx := context.Background()
+	// setup fake client with needed parameters
+	client := createFakeClient()
+	
+	// add deployment
+	nonMatchLabelDeployment := createTestDeployment("deleting", "default", "", map[string]string{"mesh": "true"})
+	client.Create(ctx, nonMatchLabelDeployment)
+
+	nonMatchLabelDeployment.DeletionTimestamp = &metav1.Time{time.Now()}
+	client.Update(ctx, nonMatchLabelDeployment)
+	
+	// setup default match criteria (or read from somewhere)
+	matchCriteria := &config.MatchCriteria{}
+	reconciler := rollout.New(client, matchCriteria)
+
+	nsName := types.NamespacedName{
+		Namespace: "default",
+		Name:      "deleting",
+	}
+	req := ctrl.Request{
+		NamespacedName: nsName,
+	}
+
+	result, err := reconciler.Reconcile(ctx, req)
+	require.NoError(t, err)
+
+	require.Equal(t, result.RequeueAfter, time.Duration(0))
+}
+
+func getRestartAtTime(obj *appsv1.Deployment) string {
+	annotations := obj.Spec.Template.Annotations
+	if annotations == nil {
+		return ""
+	}
+	return annotations["kubectl.kubernetes.io/restartedAt"]
 }
