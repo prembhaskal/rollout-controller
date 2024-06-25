@@ -54,6 +54,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 
+	// if already deleting, ignore it
+	if obj.DeletionTimestamp != nil {
+		logger.V(2).Info("Deployment being deleted")
+		return ctrl.Result{}, nil
+	}
+
 	cfg := r.matchCriteria.Config()
 	logger.V(0).Info("using", "matching config", cfg)
 
@@ -72,7 +78,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: nextInterval}, nil
 	}
 
-	logger.Info("doing rollout restart for deployment...")
+	logger.Info("performing rollout restart for deployment...")
 	err = r.triggerRollout(ctx, obj, restartTime)
 	if err != nil {
 		logger.Error(err, "error patching the deployment")
@@ -109,14 +115,15 @@ func (r *Reconciler) isRestartNeeded(logger logr.Logger, obj *appsv1.Deployment,
 	}
 	if restartTime.Before(lastRestarted) {
 		// this can happen if someone manually edits deployment incorrectly
-		logger.Info("error: last restart time is in future", "lastRestart", lastRestarted, "newRestart", restartTime)
-		return false, 0, err
+		logger.Info("last restart time is in future", "lastRestart", lastRestarted, "newRestart", restartTime)
+		return false, restartInterval, err
 	}
 	nextRestartInterval := restartInterval - restartTime.Sub(lastRestarted)
 	// lastRestart + restartInterval < newRestartTime <-- match this condition for restart
 	return lastRestarted.Add(restartInterval).Before(restartTime), nextRestartInterval, nil
 }
 
+// TODO move this matching logic to criteria object itself.
 // check if obj matches the needed label and namespace
 func (r *Reconciler) matchesCriteria(obj *appsv1.Deployment, cfg config.FlipperConfig) bool {
 	if obj.Labels[cfg.MatchLabel] != cfg.MatchValue {

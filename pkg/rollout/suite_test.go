@@ -33,7 +33,7 @@ var testEnv *envtest.Environment
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Controller Suite")
+	RunSpecs(t, "Controller E2E Tests")
 }
 
 var _ = BeforeSuite(func() {
