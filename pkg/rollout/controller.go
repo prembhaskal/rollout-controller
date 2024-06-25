@@ -59,14 +59,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// if already deleting, ignore it
 	if obj.DeletionTimestamp != nil {
-		logger.V(2).Info("Deployment being deleted")
+		logger.V(2).Info("Ignoring deployment in deleting state")
 		return ctrl.Result{}, nil
 	}
 
 	cfg := r.matchCriteria.Config()
 	logger.V(0).Info("using", "matching config", cfg)
 
-	if !r.matchesCriteria(obj, cfg) {
+	if !r.matchCriteria.Matches(obj) {
 		logger.Info("ignoring non matching deployment")
 		return ctrl.Result{}, nil
 	}
@@ -77,7 +77,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 	if !restartNeeded {
-		logger.Info("skipping deployment as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
+		logger.Info("skipping as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
 		return ctrl.Result{RequeueAfter: nextInterval}, nil
 	}
 
@@ -124,18 +124,6 @@ func (r *Reconciler) isRestartNeeded(logger logr.Logger, obj *appsv1.Deployment,
 	nextRestartInterval := restartInterval - restartTime.Sub(lastRestarted)
 	// lastRestart + restartInterval < newRestartTime <-- match this condition for restart
 	return lastRestarted.Add(restartInterval).Before(restartTime), nextRestartInterval, nil
-}
-
-// TODO move this matching logic to criteria object itself.
-// check if obj matches the needed label and namespace
-func (r *Reconciler) matchesCriteria(obj *appsv1.Deployment, cfg config.FlipperConfig) bool {
-	if obj.Labels[cfg.MatchLabel] != cfg.MatchValue {
-		return false
-	}
-	if cfg.Namespace != "" && cfg.Namespace != obj.Namespace {
-		return false
-	}
-	return true
 }
 
 func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, obj client.Object) []reconcile.Request {

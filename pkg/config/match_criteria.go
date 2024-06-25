@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
 )
 
@@ -70,4 +72,15 @@ func (m *MatchCriteria) DeleteConfig() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.config = nil
+}
+
+func (m *MatchCriteria) Matches(obj metav1.Object) bool {
+	cfg := m.Config()
+	if obj.GetLabels()[cfg.MatchLabel] != cfg.MatchValue {
+		return false
+	}
+	if cfg.Namespace != "" && cfg.Namespace != obj.GetNamespace() {
+		return false
+	}
+	return true
 }
