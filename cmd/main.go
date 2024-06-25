@@ -37,7 +37,6 @@ import (
 	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 	"github.com/prembhaskal/rollout-controller/pkg/config"
-	"github.com/prembhaskal/rollout-controller/pkg/flipper"
 	"github.com/prembhaskal/rollout-controller/pkg/rollout"
 )
 
@@ -126,14 +125,6 @@ func main() {
 	}
 
 	matchCriteria := &config.MatchCriteria{}
-
-	flipperReconciler := flipper.New(mgr.GetClient(), mgr.GetScheme(), matchCriteria)
-	if err = flipperReconciler.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Flipper")
-		os.Exit(1)
-	}
-	// +kubebuilder:scaffold:builder
-
 	rolloutReconciler := rollout.New(mgr.GetClient(), matchCriteria)
 	if err = rolloutReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create rollout controller", "controller", "Rollout")
