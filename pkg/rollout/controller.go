@@ -34,9 +34,9 @@ func New(client client.Client, matchCriteria *config.MatchCriteria) *Reconciler 
 	}
 }
 
-// +kubebuilder:rbac:groups=apps.v1,resources=deployment,verbs=get;list;watch;create;update;patch
-// +kubebuilder:rbac:groups=apps.v1,resources=deployment/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=apps.v1,resources=deployment/finalizers,verbs=update
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments/finalizers,verbs=update
 // +kubebuilder:rbac:groups=flipper.io.github.com,resources=flippers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=flipper.io.github.com,resources=flippers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=flipper.io.github.com,resources=flippers/finalizers,verbs=update
