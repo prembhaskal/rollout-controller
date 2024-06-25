@@ -117,7 +117,6 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			Expect(result.RequeueAfter < matchCriteria.Config().Interval).To(BeTrue())
 		})
 
-		
 		It("throws error for improperly formatted previous restart time", func() {
 			now := time.Now()
 			previousRestart := now.Add(-10 * time.Minute)

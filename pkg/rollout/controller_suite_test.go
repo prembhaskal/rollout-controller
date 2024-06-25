@@ -1,5 +1,5 @@
-//go:build e2e
-// +build e2e
+//go:build integration
+// +build integration
 
 package rollout_test
 
@@ -30,7 +30,7 @@ var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 
-func TestControllers(t *testing.T) {
+func TestIntegration(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	RunSpecs(t, "Controller E2E Tests")
