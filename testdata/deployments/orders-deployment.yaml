@@ -1,7 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: inventory
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: 
   name: orders
+  namespace: inventory
   labels:
     mesh: "true"
 spec:
@@ -19,4 +27,4 @@ spec:
         image: busybox
         command: ["/bin/sh", "-c"]
         args:
-          - while true; do echo "order processing $(date)"; sleep 10; done
+          - while true; do echo "order processing $(date)"; sleep 30; done

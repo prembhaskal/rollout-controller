@@ -65,7 +65,6 @@ func (m *MatchCriteria) UpdateConfig(flip *flipperiov1alpha1.Flipper) {
 		Interval:   flip.Spec.Interval.Duration,
 		Namespace:  flip.Spec.Match.Namespace,
 	}
-
 }
 
 func (m *MatchCriteria) DeleteConfig() {
