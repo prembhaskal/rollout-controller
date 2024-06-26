@@ -62,6 +62,34 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 	Context("Matching Deployments", func() {
 		It("Restarts Matching Deployment and Requeue", func() {
 			// create a deployment matching the default criteria
+			previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
+			depObject = createTestDeployment("orders", "random", previousRestart, map[string]string{"mesh": "true"})
+			err := client.Create(ctx, depObject)
+			Expect(err).ToNot(HaveOccurred())
+
+			// reconcile
+			nsName := types.NamespacedName{Name: "orders", Namespace: "random"}
+			req := ctrl.Request{NamespacedName: nsName}
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+
+			// restart and requeue for next rounds
+			var obj appsv1.Deployment
+			err = client.Get(ctx, nsName, &obj)
+			Expect(err).ToNot(HaveOccurred())
+
+			restartedAt := getRestartedAt(&obj)
+			Expect(restartedAt).ToNot(BeEmpty())
+
+			_, err = time.Parse(time.RFC3339, restartedAt)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(restartedAt).ToNot(Equal(previousRestart))
+
+			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
+		})
+
+		It("Does not Restart Fresh Deployment immediately", func() {
+			// create a deployment matching the default criteria
 			depObject = createTestDeployment("orders", "random", "", map[string]string{"mesh": "true"})
 			err := client.Create(ctx, depObject)
 			Expect(err).ToNot(HaveOccurred())
@@ -77,11 +105,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err = client.Get(ctx, nsName, &obj)
 			Expect(err).ToNot(HaveOccurred())
 
-			restartedAt := getRestartAtTime(&obj)
-			Expect(restartedAt).ToNot(BeEmpty())
-
-			_, err = time.Parse(time.RFC3339, restartedAt)
-			Expect(err).ToNot(HaveOccurred())
+			restartedAt := getRestartedAt(&obj)
+			Expect(restartedAt).To(BeEmpty())
 
 			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
 		})
@@ -107,7 +132,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err = client.Get(ctx, nsName, &obj)
 			Expect(err).ToNot(HaveOccurred())
 
-			restartedAt := getRestartAtTime(&obj)
+			restartedAt := getRestartedAt(&obj)
 			Expect(restartedAt).To(Equal(prevRestartStr))
 
 			// restart after around 10-2=8 mins so < 10mins.
@@ -154,7 +179,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err = client.Get(ctx, nsName, &obj)
 			Expect(err).ToNot(HaveOccurred())
 
-			restartedAt := getRestartAtTime(&obj)
+			restartedAt := getRestartedAt(&obj)
 			Expect(restartedAt).To(Equal(prevRestartStr))
 
 			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
@@ -165,7 +190,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 	Context("Non Matching deployments", func() {
 		It("ignores deployment with non matching label", func() {
 			// create a deployment matching the default criteria
-			depObject = createTestDeployment("orders", "random", "", map[string]string{"mesh": "false"})
+			previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
+			depObject = createTestDeployment("orders", "random", previousRestart, map[string]string{"mesh": "false"})
 			err := client.Create(ctx, depObject)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -180,8 +206,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err = client.Get(ctx, nsName, &obj)
 			Expect(err).ToNot(HaveOccurred())
 
-			restartedAt := getRestartAtTime(&obj)
-			Expect(restartedAt).To(BeEmpty())
+			restartedAt := getRestartedAt(&obj)
+			Expect(restartedAt).To(Equal(previousRestart))
 
 			Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
 		})
@@ -197,7 +223,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 		})
 		It("matches new labels", func() {
 			// create a deployment matching the default criteria
-			depObject = createTestDeployment("orders", "service", "", map[string]string{"foo": "bar"})
+			previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
+			depObject = createTestDeployment("orders", "service", previousRestart, map[string]string{"foo": "bar"})
 			err := client.Create(ctx, depObject)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -212,8 +239,9 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err = client.Get(ctx, nsName, &obj)
 			Expect(err).ToNot(HaveOccurred())
 
-			restartedAt := getRestartAtTime(&obj)
+			restartedAt := getRestartedAt(&obj)
 			Expect(restartedAt).ToNot(BeEmpty())
+			Expect(restartedAt).ToNot(Equal(previousRestart))
 
 			_, err = time.Parse(time.RFC3339, restartedAt)
 			Expect(err).ToNot(HaveOccurred())
@@ -223,7 +251,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 
 		It("ignores deployment in different namespace", func() {
 			// create a deployment matching the default criteria
-			depObject = createTestDeployment("orders", "random", "", map[string]string{"foo": "bar"})
+			previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
+			depObject = createTestDeployment("orders", "random", previousRestart, map[string]string{"foo": "bar"})
 			err := client.Create(ctx, depObject)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -238,8 +267,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err = client.Get(ctx, nsName, &obj)
 			Expect(err).ToNot(HaveOccurred())
 
-			restartedAt := getRestartAtTime(&obj)
-			Expect(restartedAt).To(BeEmpty())
+			restartedAt := getRestartedAt(&obj)
+			Expect(restartedAt).To(Equal(previousRestart))
 
 			Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
 		})
@@ -278,7 +307,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err = client.Get(ctx, nsName, &obj)
 			Expect(err).ToNot(HaveOccurred())
 
-			restartedAt := getRestartAtTime(&obj)
+			restartedAt := getRestartedAt(&obj)
 			Expect(restartedAt).To(BeEmpty())
 
 			Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
@@ -337,11 +366,10 @@ func createTestDeployment(name, namespace, restartAt string, labels map[string]s
 
 func createFakeClient() client.Client {
 	return fake.NewClientBuilder().
-		// WithObjects(createTestDeployment("orders", "default", "", map[string]string{"mesh": "true"})).
 		Build()
 }
 
-func getRestartAtTime(obj *appsv1.Deployment) string {
+func getRestartedAt(obj *appsv1.Deployment) string {
 	annotations := obj.Spec.Template.Annotations
 	if annotations == nil {
 		return ""

@@ -72,7 +72,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	restartTime := time.Now()
-	restartNeeded, nextInterval, err := r.isRestartNeeded(logger, obj, restartTime, cfg.Interval)
+	restartNeeded, nextInterval, err := r.shouldRestartNow(logger, obj, restartTime, cfg.Interval)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -100,16 +100,19 @@ func (r *Reconciler) triggerRollout(ctx context.Context, obj *appsv1.Deployment,
 	return r.Patch(ctx, objCopy, client.MergeFrom(obj))
 }
 
-// return true if restart needed
-// return false with error if issue finding previous restart time
-// returns false and interval after which restart to be triggered
-func (r *Reconciler) isRestartNeeded(logger logr.Logger, obj *appsv1.Deployment, restartTime time.Time, restartInterval time.Duration) (bool, time.Duration, error) {
-	if obj.Spec.Template.ObjectMeta.Annotations == nil {
-		return true, 0, nil
-	}
-	lastRestartedStr := obj.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"]
+// returns true if it should be restarted now
+// if error reading previous restart time, returns false with the error
+// otherwise returns false and nextRestartInterval
+func (r *Reconciler) shouldRestartNow(logger logr.Logger, obj *appsv1.Deployment, restartTime time.Time, restartInterval time.Duration) (bool, time.Duration, error) {
+	// if obj.Spec.Template.ObjectMeta.Annotations == nil {
+	// 	return true, 0, nil
+	// }
+	// lastRestartedStr := obj.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"]
+
+	lastRestartedStr := getRestartedAt(obj)
 	if lastRestartedStr == "" {
-		return true, 0, nil
+		// restart at next interval for no previously restarted deployment or fresh deployments
+		return false, restartInterval, nil
 	}
 	lastRestarted, err := time.Parse(time.RFC3339, lastRestartedStr)
 	if err != nil {
@@ -124,6 +127,13 @@ func (r *Reconciler) isRestartNeeded(logger logr.Logger, obj *appsv1.Deployment,
 	nextRestartInterval := restartInterval - restartTime.Sub(lastRestarted)
 	// lastRestart + restartInterval < newRestartTime <-- match this condition for restart
 	return lastRestarted.Add(restartInterval).Before(restartTime), nextRestartInterval, nil
+}
+
+func getRestartedAt(obj *appsv1.Deployment) string {
+	if obj.Spec.Template.ObjectMeta.Annotations == nil {
+		return ""
+	}
+	return obj.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"]
 }
 
 func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, obj client.Object) []reconcile.Request {

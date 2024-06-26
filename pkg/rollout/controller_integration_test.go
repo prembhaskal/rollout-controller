@@ -7,16 +7,14 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	// "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	// "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
 	"github.com/prembhaskal/rollout-controller/pkg/config"
@@ -49,11 +47,12 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 		}()
 	})
 
-	It("Restart a Deployment which is never restarted Before", func() {
+	It("Restarts a deployment matching labels", func() {
 		const resourceName = "test-resource"
 		const deploymentName = "deployment-one"
 		const namespace = "default"
-		deployment := createDeployment(deploymentName, namespace, "", map[string]string{"mesh": "true"})
+		previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
+		deployment := createDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "true"})
 
 		err := k8sClient.Create(ctx, deployment)
 		Expect(err).ToNot(HaveOccurred())
@@ -67,10 +66,10 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err := k8sClient.Get(ctx, nsName, &updatedDepObj)
 			g.Expect(err).ToNot(HaveOccurred())
 
-			g.Expect(updatedDepObj.Spec.Template.Annotations).NotTo(BeNil())
-			restartedAt := updatedDepObj.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"]
+			restartedAt := getRestartedAt(&updatedDepObj)
 			GinkgoWriter.Println("[test log] restartedAt", restartedAt)
 			g.Expect(restartedAt).ToNot(BeEmpty())
+			g.Expect(restartedAt).ToNot(Equal(previousRestart))
 
 			_, err = time.Parse(time.RFC3339, restartedAt)
 			Expect(err).ToNot(HaveOccurred())
@@ -86,7 +85,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 		const resourceName = "test-resource"
 		const deploymentName = "deployment-two"
 		const namespace = "default"
-		deployment := createDeployment(deploymentName, namespace, "", map[string]string{"mesh": "false"})
+		previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
+		deployment := createDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "false"})
 
 		err := k8sClient.Create(ctx, deployment)
 		Expect(err).ToNot(HaveOccurred())
@@ -100,11 +100,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err := k8sClient.Get(ctx, nsName, &updatedDepObj)
 			g.Expect(err).ToNot(HaveOccurred())
 
-			if updatedDepObj.Spec.Template.Annotations == nil {
-				return nil
-			}
-			restartedAt := updatedDepObj.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"]
-			g.Expect(restartedAt).To(BeEmpty())
+			restartedAt := getRestartedAt(&updatedDepObj)
+			g.Expect(restartedAt).To(Equal(previousRestart))
 			return nil
 		}).WithTimeout(waitTime).WithPolling(pollTime).Should(Succeed())
 
@@ -117,9 +114,9 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 		const deploymentName = "deployment-three"
 		const namespace = "default"
 
-		pastTime := time.Now().Add(-1 * time.Minute).Format(time.RFC3339)
-		GinkgoWriter.Println("[test log] currTime", pastTime)
-		deployment := createDeployment(deploymentName, namespace, pastTime, map[string]string{"mesh": "true"})
+		previousRestart := time.Now().Add(-1 * time.Minute).Format(time.RFC3339)
+		GinkgoWriter.Println("[test log] currTime", previousRestart)
+		deployment := createDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "true"})
 
 		err := k8sClient.Create(ctx, deployment)
 		Expect(err).ToNot(HaveOccurred())
@@ -136,10 +133,9 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err := k8sClient.Get(ctx, nsName, &updatedDepObj)
 			g.Expect(err).ToNot(HaveOccurred())
 
-			g.Expect(updatedDepObj.Spec.Template.Annotations).NotTo(BeNil())
-			restartedAt := updatedDepObj.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"]
+			restartedAt := getRestartedAt(&updatedDepObj)
 			GinkgoWriter.Println("[test log] restartedAt", restartedAt)
-			g.Expect(restartedAt).To(Equal(pastTime))
+			g.Expect(restartedAt).To(Equal(previousRestart))
 			return nil
 		}).WithTimeout(waitTime).WithPolling(pollTime).Should(Succeed())
 
@@ -170,12 +166,12 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 
 		// allow flipper CR reconcile
 		time.Sleep(2 * time.Second)
-
-		depObjMatch := createDeployment(deploymentMatch, defaultns, "", map[string]string{"foo": "true"})
+		previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
+		depObjMatch := createDeployment(deploymentMatch, defaultns, previousRestart, map[string]string{"foo": "true"})
 		err = k8sClient.Create(ctx, depObjMatch)
 		Expect(err).ToNot(HaveOccurred())
 
-		depObjNonMatch := createDeployment(deploymentNonMatch, defaultns, "", map[string]string{"mesh": "true"})
+		depObjNonMatch := createDeployment(deploymentNonMatch, defaultns, previousRestart, map[string]string{"mesh": "true"})
 		err = k8sClient.Create(ctx, depObjNonMatch)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -188,8 +184,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err := k8sClient.Get(ctx, nsName, &updatedDepObj)
 			g.Expect(err).ToNot(HaveOccurred())
 
-			g.Expect(updatedDepObj.Spec.Template.Annotations).NotTo(BeNil())
-			restartedAt := updatedDepObj.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"]
+			restartedAt := getRestartedAt(&updatedDepObj)
 			GinkgoWriter.Println("[test log] restartedAt", restartedAt)
 			_, err = time.Parse(time.RFC3339, restartedAt)
 			Expect(err).ToNot(HaveOccurred())
@@ -206,11 +201,8 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			err := k8sClient.Get(ctx, nsName, &updatedDepObj)
 			g.Expect(err).ToNot(HaveOccurred())
 
-			if updatedDepObj.Spec.Template.Annotations == nil {
-				return nil
-			}
-			restartedAt := updatedDepObj.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"]
-			g.Expect(restartedAt).To(BeEmpty())
+			restartedAt := getRestartedAt(&updatedDepObj)
+			g.Expect(restartedAt).To(Equal(previousRestart))
 			return nil
 		}).WithTimeout(waitTime).WithPolling(pollTime).Should(Succeed())
 
