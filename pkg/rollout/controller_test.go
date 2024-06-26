@@ -295,8 +295,8 @@ func getFlipperCR(name, matchnamespace string, requeueInterval time.Duration, la
 		Spec: flipperiov1alpha1.FlipperSpec{
 			Interval: metav1.Duration{Duration: requeueInterval},
 			Match: flipperiov1alpha1.MatchSpec{
-				Labels:    labels,
-				Namespace: matchnamespace,
+				Labels:     labels,
+				Namespaces: []string{matchnamespace},
 			},
 		},
 	}

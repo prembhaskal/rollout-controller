@@ -50,8 +50,10 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
-                  namespace:
-                    type: string
+                  namespaces:
+                    items:
+                      type: string
+                    type: array
                 type: object
             type: object
           status:

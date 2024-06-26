@@ -19,19 +19,19 @@ type FlipperConfig struct {
 	MatchLabel string
 	MatchValue string
 	Interval   time.Duration
-	Namespace  string
+	Namespaces []string
 }
 
 func (f FlipperConfig) String() string {
-	return fmt.Sprintf("match label [%s:%s] every [%s]s in namespace %s",
-		f.MatchLabel, f.MatchValue, f.Interval.String(), f.Namespace)
+	return fmt.Sprintf("match label [%s:%s] every [%s]s in namespaces %v",
+		f.MatchLabel, f.MatchValue, f.Interval.String(), f.Namespaces)
 }
 
 var defaultConfig = FlipperConfig{
 	MatchLabel: "mesh",
 	MatchValue: "true",
 	Interval:   10 * time.Minute,
-	Namespace:  "",
+	Namespaces: []string{},
 }
 
 func (m *MatchCriteria) Config() FlipperConfig {
@@ -63,7 +63,7 @@ func (m *MatchCriteria) UpdateConfig(flip *flipperiov1alpha1.Flipper) {
 		MatchLabel: matchLabel,
 		MatchValue: matchValue,
 		Interval:   flip.Spec.Interval.Duration,
-		Namespace:  flip.Spec.Match.Namespace,
+		Namespaces: flip.Spec.Match.Namespaces,
 	}
 }
 
@@ -78,8 +78,14 @@ func (m *MatchCriteria) Matches(obj metav1.Object) bool {
 	if obj.GetLabels()[cfg.MatchLabel] != cfg.MatchValue {
 		return false
 	}
-	if cfg.Namespace != "" && cfg.Namespace != obj.GetNamespace() {
-		return false
+	// empty means we match all namespaces
+	if len(cfg.Namespaces) == 0 {
+		return true
 	}
-	return true
+	for _, ns := range cfg.Namespaces {
+		if ns == obj.GetNamespace() {
+			return true
+		}
+	}
+	return false
 }

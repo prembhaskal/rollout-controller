@@ -35,8 +35,8 @@ type FlipperSpec struct {
 
 // MatchSpec defines specification of the deployment to be matched
 type MatchSpec struct {
-	Labels    map[string]string `json:"labels,omitempty"`
-	Namespace string            `json:"namespace,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Namespaces []string          `json:"namespaces,omitempty"`
 }
 
 // FlipperStatus defines the observed state of Flipper

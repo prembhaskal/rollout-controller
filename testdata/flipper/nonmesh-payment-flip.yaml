@@ -7,4 +7,5 @@ spec:
   match:
     labels:
       mesh: "false"
-    namespace: "payment"
+    namespaces: 
+      - "payment"
