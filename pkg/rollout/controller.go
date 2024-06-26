@@ -193,39 +193,15 @@ func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger, o
 	if lastRestarted.After(currRestartTime) {
 		return false, ctrl.Result{RequeueAfter: restartInterval}, nil
 	}
-	// exp ... last ... now
+	// exp ... last ... now ... <next-int> ... nextRestart
 	if expPrevRestart.Before(lastRestarted) {
-		nextInterval := restartInterval - lastRestarted.Sub(expPrevRestart)
+		nextInterval := restartInterval - currRestartTime.Sub(lastRestarted)
 		logger.Info("skipping as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
 		return false, ctrl.Result{RequeueAfter: nextInterval}, nil
 	}
 
 	return true, ctrl.Result{}, nil
 }
-
-// 	// returns true if it should be restarted now
-// // if error reading previous restart time, returns false with the error
-// // otherwise returns false and nextRestartInterval
-// func (r *Reconciler) shouldRestartNow(logger logr.Logger, obj *appsv1.Deployment, restartTime time.Time, restartInterval time.Duration) (bool, time.Duration, error) {
-// 	// lastRestartedStr := getRestartedAt(obj)
-// 	lastRestartedStr := getRolloutLastRestart(obj)
-// 	if lastRestartedStr == "" {
-// 		return true, 0, nil
-// 	}
-// 	lastRestarted, err := time.Parse(time.RFC3339, lastRestartedStr)
-// 	if err != nil {
-// 		logger.Error(err, "error parsing last restart time from deployment", "lastRestarted", lastRestarted)
-// 		return false, 0, err
-// 	}
-// 	if restartTime.Before(lastRestarted) {
-// 		// this can happen if someone manually edits deployment incorrectly
-// 		logger.Info("last restart time is in future", "lastRestart", lastRestarted, "newRestart", restartTime)
-// 		return false, restartInterval, err
-// 	}
-// 	nextRestartInterval := restartInterval - restartTime.Sub(lastRestarted)
-// 	// lastRestart + restartInterval < newRestartTime <-- match this condition for restart
-// 	return lastRestarted.Add(restartInterval).Before(restartTime), nextRestartInterval, nil
-// }
 
 func getRolloutLastRestart(obj *appsv1.Deployment) string {
 	if obj.Annotations == nil {
