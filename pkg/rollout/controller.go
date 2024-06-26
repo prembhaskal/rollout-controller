@@ -43,14 +43,14 @@ func New(client client.Client, matchCriteria *config.MatchCriteria) *Reconciler 
 
 // Reconcile reconciles the deployment and triggers rollout restart if needed.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.V(2).Info("In Reconcile method")
+	logger := log.FromContext(ctx) // default level as 2
+	logger.Info("In Reconcile method")
 
 	obj := &appsv1.Deployment{}
 	err := r.Get(ctx, req.NamespacedName, obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			logger.V(2).Info("Deployment deleted")
+			logger.Info("Deployment deleted")
 			return ctrl.Result{}, nil
 		}
 		logger.Error(err, "unable to get deployment")
@@ -59,12 +59,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// if already deleting, ignore it
 	if obj.DeletionTimestamp != nil {
-		logger.V(2).Info("Ignoring deployment in deleting state")
+		logger.Info("Ignoring deployment in deleting state")
 		return ctrl.Result{}, nil
 	}
 
 	cfg := r.matchCriteria.Config()
-	logger.V(0).Info("using", "matching config", cfg)
+	logger.V(2).Info("using", "matching config", cfg)
 
 	if !r.matchCriteria.Matches(obj) {
 		logger.Info("ignoring non matching deployment")
@@ -104,11 +104,6 @@ func (r *Reconciler) triggerRollout(ctx context.Context, obj *appsv1.Deployment,
 // if error reading previous restart time, returns false with the error
 // otherwise returns false and nextRestartInterval
 func (r *Reconciler) shouldRestartNow(logger logr.Logger, obj *appsv1.Deployment, restartTime time.Time, restartInterval time.Duration) (bool, time.Duration, error) {
-	// if obj.Spec.Template.ObjectMeta.Annotations == nil {
-	// 	return true, 0, nil
-	// }
-	// lastRestartedStr := obj.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"]
-
 	lastRestartedStr := getRestartedAt(obj)
 	if lastRestartedStr == "" {
 		// restart at next interval for no previously restarted deployment or fresh deployments
