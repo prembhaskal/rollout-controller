@@ -20,6 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+const rolloutLastRestartAnnotation = "flipper.io/rollout-last-restart"
+
 var _ reconcile.Reconciler = &Reconciler{}
 
 type Reconciler struct {
@@ -71,24 +73,80 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	restartTime := time.Now()
-	restartNeeded, nextInterval, err := r.shouldRestartNow(logger, obj, restartTime, cfg.Interval)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if !restartNeeded {
-		logger.Info("skipping as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
-		return ctrl.Result{RequeueAfter: nextInterval}, nil
+	// check if it is first seen by controller
+	// if rollout restart absent , update to now and requeueAfter interval
+	// rolloutLastRestart := getRolloutLastRestart(obj)
+	// if rolloutLastRestart == "" {
+	// 	err = r.updateRolloutLastRestartAnnotation(ctx, obj)
+	// 	if err != nil {
+	// 		logger.Error(err, "error adding rollout last restart annotation")
+	// 		return ctrl.Result{}, err
+	// 	}
+	// 	return ctrl.Result{RequeueAfter: cfg.Interval}, nil
+	// }
+
+	// // if rollout time present and invalid, fix it to now and requeueAfter interval
+	// lastRestarted, err := time.Parse(time.RFC3339, rolloutLastRestart)
+	// if err != nil {
+	// 	err = r.updateRolloutLastRestartAnnotation(ctx, obj)
+	// 	if err != nil {
+	// 		logger.Error(err, "error adding rollout restart annotation")
+	// 		return ctrl.Result{}, err
+	// 	}
+	// 	return ctrl.Result{RequeueAfter: cfg.Interval}, nil
+	// }
+
+	// currRestartTime := time.Now()
+	// expPrevRestart := currRestartTime.Add(-cfg.Interval)
+
+	// // exp ... last ... now
+	// if expPrevRestart.Before(lastRestarted) {
+	// 	nextInterval := max(cfg.Interval-lastRestarted.Sub(expPrevRestart), cfg.Interval)
+	// 	logger.Info("skipping as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
+	// 	return ctrl.Result{RequeueAfter: nextInterval}, nil
+	// }
+
+	currRestartTime := time.Now()
+	restartnow, result, err := r.shouldRestartNow(ctx, logger, obj, currRestartTime, cfg.Interval)
+	if !restartnow {
+		return result, err
 	}
 
 	logger.Info("performing rollout restart for deployment...")
-	err = r.triggerRollout(ctx, obj, restartTime)
+	err = r.dotriggerRollout(ctx, obj, currRestartTime)
 	if err != nil {
 		logger.Error(err, "error patching the deployment")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{RequeueAfter: cfg.Interval}, nil
+}
+
+func (r *Reconciler) dotriggerRollout(ctx context.Context, obj *appsv1.Deployment, restartTime time.Time) error {
+	restartTimeFormatted := restartTime.Format(time.RFC3339)
+
+	objcopy := obj.DeepCopy()
+	if objcopy.Spec.Template.ObjectMeta.Annotations == nil {
+		objcopy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+	}
+	objcopy.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = restartTimeFormatted
+
+	if objcopy.Annotations == nil {
+		objcopy.Annotations = make(map[string]string)
+	}
+	objcopy.Annotations[rolloutLastRestartAnnotation] = restartTimeFormatted
+
+	return r.Patch(ctx, objcopy, client.MergeFrom(obj))
+}
+
+func (r *Reconciler) updateRolloutLastRestartAnnotation(ctx context.Context, obj *appsv1.Deployment) error {
+	objcopy := obj.DeepCopy()
+	if objcopy.Annotations == nil {
+		objcopy.Annotations = make(map[string]string)
+	}
+	objcopy.Annotations[rolloutLastRestartAnnotation] = time.Now().Format(time.RFC3339)
+
+	return r.Patch(ctx, objcopy, client.MergeFrom(obj))
 }
 
 func (r *Reconciler) triggerRollout(ctx context.Context, obj *appsv1.Deployment, restartTime time.Time) error {
@@ -101,27 +159,74 @@ func (r *Reconciler) triggerRollout(ctx context.Context, obj *appsv1.Deployment,
 }
 
 // returns true if it should be restarted now
-// if error reading previous restart time, returns false with the error
-// otherwise returns false and nextRestartInterval
-func (r *Reconciler) shouldRestartNow(logger logr.Logger, obj *appsv1.Deployment, restartTime time.Time, restartInterval time.Duration) (bool, time.Duration, error) {
-	lastRestartedStr := getRestartedAt(obj)
-	if lastRestartedStr == "" {
-		// restart at next interval for no previously restarted deployment or fresh deployments
-		return false, restartInterval, nil
+// return false if we cannot restart now and returns the reconcil result and error
+// it also updates the rollout annotation in case it is set incorrectly.
+func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger, obj *appsv1.Deployment, currRestartTime time.Time, restartInterval time.Duration) (bool, ctrl.Result, error) {
+	// check if it is first seen by controller
+	// if rollout restart absent , update to now and requeueAfter interval
+	rolloutLastRestart := getRolloutLastRestart(obj)
+	if rolloutLastRestart == "" {
+		err := r.updateRolloutLastRestartAnnotation(ctx, obj)
+		if err != nil {
+			logger.Error(err, "error adding rollout last restart annotation")
+			return false, ctrl.Result{}, err
+		}
+		return false, ctrl.Result{RequeueAfter: restartInterval}, nil
 	}
-	lastRestarted, err := time.Parse(time.RFC3339, lastRestartedStr)
+
+	// if rollout time present and invalid, fix it to now and requeueAfter interval
+	lastRestarted, err := time.Parse(time.RFC3339, rolloutLastRestart)
 	if err != nil {
-		logger.Error(err, "error parsing last restart time from deployment", "lastRestarted", lastRestarted)
-		return false, 0, err
+		err = r.updateRolloutLastRestartAnnotation(ctx, obj)
+		if err != nil {
+			logger.Error(err, "error adding rollout restart annotation")
+			return false, ctrl.Result{}, err
+		}
+		return false, ctrl.Result{RequeueAfter: restartInterval}, nil
 	}
-	if restartTime.Before(lastRestarted) {
-		// this can happen if someone manually edits deployment incorrectly
-		logger.Info("last restart time is in future", "lastRestart", lastRestarted, "newRestart", restartTime)
-		return false, restartInterval, err
+
+	// currRestartTime := time.Now()
+	expPrevRestart := currRestartTime.Add(-restartInterval)
+
+	// exp ... last ... now
+	if expPrevRestart.Before(lastRestarted) {
+		nextInterval := max(restartInterval-lastRestarted.Sub(expPrevRestart), restartInterval)
+		logger.Info("skipping as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
+		return false, ctrl.Result{RequeueAfter: nextInterval}, nil
 	}
-	nextRestartInterval := restartInterval - restartTime.Sub(lastRestarted)
-	// lastRestart + restartInterval < newRestartTime <-- match this condition for restart
-	return lastRestarted.Add(restartInterval).Before(restartTime), nextRestartInterval, nil
+	
+	return true, ctrl.Result{}, nil
+}
+
+// 	// returns true if it should be restarted now
+// // if error reading previous restart time, returns false with the error
+// // otherwise returns false and nextRestartInterval
+// func (r *Reconciler) shouldRestartNow(logger logr.Logger, obj *appsv1.Deployment, restartTime time.Time, restartInterval time.Duration) (bool, time.Duration, error) {
+// 	// lastRestartedStr := getRestartedAt(obj)
+// 	lastRestartedStr := getRolloutLastRestart(obj)
+// 	if lastRestartedStr == "" {
+// 		return true, 0, nil
+// 	}
+// 	lastRestarted, err := time.Parse(time.RFC3339, lastRestartedStr)
+// 	if err != nil {
+// 		logger.Error(err, "error parsing last restart time from deployment", "lastRestarted", lastRestarted)
+// 		return false, 0, err
+// 	}
+// 	if restartTime.Before(lastRestarted) {
+// 		// this can happen if someone manually edits deployment incorrectly
+// 		logger.Info("last restart time is in future", "lastRestart", lastRestarted, "newRestart", restartTime)
+// 		return false, restartInterval, err
+// 	}
+// 	nextRestartInterval := restartInterval - restartTime.Sub(lastRestarted)
+// 	// lastRestart + restartInterval < newRestartTime <-- match this condition for restart
+// 	return lastRestarted.Add(restartInterval).Before(restartTime), nextRestartInterval, nil
+// }
+
+func getRolloutLastRestart(obj *appsv1.Deployment) string {
+	if obj.Annotations == nil {
+		return ""
+	}
+	return obj.Annotations[rolloutLastRestartAnnotation]
 }
 
 func getRestartedAt(obj *appsv1.Deployment) string {
