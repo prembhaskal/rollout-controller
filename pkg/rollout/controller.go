@@ -164,7 +164,7 @@ func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, ob
 			r.matchCriteria.DeleteConfig()
 			return requests
 		}
-		logger.Error(err, "error in getting flipper configuration") // TODO this will never recover
+		logger.Error(err, "error in getting flipper configuration")
 		return nil
 	}
 
