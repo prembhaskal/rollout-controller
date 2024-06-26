@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-const rolloutLastRestartAnnotation = "flipper.io/rollout-last-restart"
+const RolloutLastRestartAnnotation = "flipper.io/rollout-last-restart"
 
 var _ reconcile.Reconciler = &Reconciler{}
 
@@ -134,7 +134,7 @@ func (r *Reconciler) dotriggerRollout(ctx context.Context, obj *appsv1.Deploymen
 	if objcopy.Annotations == nil {
 		objcopy.Annotations = make(map[string]string)
 	}
-	objcopy.Annotations[rolloutLastRestartAnnotation] = restartTimeFormatted
+	objcopy.Annotations[RolloutLastRestartAnnotation] = restartTimeFormatted
 
 	return r.Patch(ctx, objcopy, client.MergeFrom(obj))
 }
@@ -144,7 +144,7 @@ func (r *Reconciler) updateRolloutLastRestartAnnotation(ctx context.Context, obj
 	if objcopy.Annotations == nil {
 		objcopy.Annotations = make(map[string]string)
 	}
-	objcopy.Annotations[rolloutLastRestartAnnotation] = time.Now().Format(time.RFC3339)
+	objcopy.Annotations[RolloutLastRestartAnnotation] = time.Now().Format(time.RFC3339)
 
 	return r.Patch(ctx, objcopy, client.MergeFrom(obj))
 }
@@ -158,9 +158,10 @@ func (r *Reconciler) triggerRollout(ctx context.Context, obj *appsv1.Deployment,
 	return r.Patch(ctx, objCopy, client.MergeFrom(obj))
 }
 
-// returns true if it should be restarted now
-// return false if we cannot restart now and returns the reconcil result and error
-// it also updates the rollout annotation in case it is set incorrectly.
+// returns true if it should be restarted now.
+// return false and reconcile result with requeuAfter set if we cannot restart now
+// it also updates the rollout last restart annotation in case it was empty or previously set incorrectly.
+// it returns the error if update fails
 func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger, obj *appsv1.Deployment, currRestartTime time.Time, restartInterval time.Duration) (bool, ctrl.Result, error) {
 	// check if it is first seen by controller
 	// if rollout restart absent , update to now and requeueAfter interval
@@ -188,13 +189,17 @@ func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger, o
 	// currRestartTime := time.Now()
 	expPrevRestart := currRestartTime.Add(-restartInterval)
 
+	// exp ... now ... last (set in future)
+	if lastRestarted.After(currRestartTime) {
+		return false, ctrl.Result{RequeueAfter: restartInterval}, nil
+	}
 	// exp ... last ... now
 	if expPrevRestart.Before(lastRestarted) {
-		nextInterval := max(restartInterval-lastRestarted.Sub(expPrevRestart), restartInterval)
+		nextInterval := restartInterval - lastRestarted.Sub(expPrevRestart)
 		logger.Info("skipping as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
 		return false, ctrl.Result{RequeueAfter: nextInterval}, nil
 	}
-	
+
 	return true, ctrl.Result{}, nil
 }
 
@@ -226,7 +231,7 @@ func getRolloutLastRestart(obj *appsv1.Deployment) string {
 	if obj.Annotations == nil {
 		return ""
 	}
-	return obj.Annotations[rolloutLastRestartAnnotation]
+	return obj.Annotations[RolloutLastRestartAnnotation]
 }
 
 func getRestartedAt(obj *appsv1.Deployment) string {

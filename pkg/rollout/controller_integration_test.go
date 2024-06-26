@@ -8,7 +8,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
+	// corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -52,7 +52,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 		const deploymentName = "deployment-one"
 		const namespace = "default"
 		previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
-		deployment := createDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "true"})
+		deployment := createTestDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "true"})
 
 		err := k8sClient.Create(ctx, deployment)
 		Expect(err).ToNot(HaveOccurred())
@@ -86,7 +86,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 		const deploymentName = "deployment-two"
 		const namespace = "default"
 		previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
-		deployment := createDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "false"})
+		deployment := createTestDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "false"})
 
 		err := k8sClient.Create(ctx, deployment)
 		Expect(err).ToNot(HaveOccurred())
@@ -116,7 +116,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 
 		previousRestart := time.Now().Add(-1 * time.Minute).Format(time.RFC3339)
 		GinkgoWriter.Println("[test log] currTime", previousRestart)
-		deployment := createDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "true"})
+		deployment := createTestDeployment(deploymentName, namespace, previousRestart, map[string]string{"mesh": "true"})
 
 		err := k8sClient.Create(ctx, deployment)
 		Expect(err).ToNot(HaveOccurred())
@@ -167,11 +167,11 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 		// allow flipper CR reconcile
 		time.Sleep(2 * time.Second)
 		previousRestart := time.Now().Add(-11 * time.Minute).Format(time.RFC3339)
-		depObjMatch := createDeployment(deploymentMatch, defaultns, previousRestart, map[string]string{"foo": "true"})
+		depObjMatch := createTestDeployment(deploymentMatch, defaultns, previousRestart, map[string]string{"foo": "true"})
 		err = k8sClient.Create(ctx, depObjMatch)
 		Expect(err).ToNot(HaveOccurred())
 
-		depObjNonMatch := createDeployment(deploymentNonMatch, defaultns, previousRestart, map[string]string{"mesh": "true"})
+		depObjNonMatch := createTestDeployment(deploymentNonMatch, defaultns, previousRestart, map[string]string{"mesh": "true"})
 		err = k8sClient.Create(ctx, depObjNonMatch)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -214,35 +214,35 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 
 })
 
-func createDeployment(name, namespace, restartAt string, labels map[string]string) *appsv1.Deployment {
-	var annotations map[string]string
-	if restartAt != "" {
-		annotations = map[string]string{"kubectl.kubernetes.io/restartedAt": restartAt}
-	}
-	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"foo": "bar"},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      map[string]string{"foo": "bar"},
-					Annotations: annotations,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx",
-						},
-					},
-				},
-			},
-		},
-	}
-}
+// func createTestDeployment(name, namespace, restartAt string, labels map[string]string) *appsv1.Deployment {
+// 	var annotations map[string]string
+// 	if restartAt != "" {
+// 		annotations = map[string]string{"kubectl.kubernetes.io/restartedAt": restartAt}
+// 	}
+// 	return &appsv1.Deployment{
+// 		ObjectMeta: metav1.ObjectMeta{
+// 			Name:      name,
+// 			Namespace: namespace,
+// 			Labels:    labels,
+// 		},
+// 		Spec: appsv1.DeploymentSpec{
+// 			Selector: &metav1.LabelSelector{
+// 				MatchLabels: map[string]string{"foo": "bar"},
+// 			},
+// 			Template: corev1.PodTemplateSpec{
+// 				ObjectMeta: metav1.ObjectMeta{
+// 					Labels:      map[string]string{"foo": "bar"},
+// 					Annotations: annotations,
+// 				},
+// 				Spec: corev1.PodSpec{
+// 					Containers: []corev1.Container{
+// 						{
+// 							Name:  "nginx",
+// 							Image: "nginx",
+// 						},
+// 					},
+// 				},
+// 			},
+// 		},
+// 	}
+// }

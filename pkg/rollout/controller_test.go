@@ -136,10 +136,11 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			Expect(restartedAt).To(Equal(prevRestartStr))
 
 			// restart after around 10-2=8 mins so < 10mins.
+			GinkgoWriter.Printf("requeue After: %d", result.RequeueAfter)
 			Expect(result.RequeueAfter < matchCriteria.Config().Interval).To(BeTrue())
 		})
 
-		It("throws error for improperly formatted previous restart time", func() {
+		It("handles improperly formatted lastRestart time", func() {
 			now := time.Now()
 			previousRestart := now.Add(-10 * time.Minute)
 			prevRestartStr := previousRestart.Format(time.RFC1123)
@@ -153,9 +154,9 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			nsName := types.NamespacedName{Name: "orders", Namespace: "random"}
 			req := ctrl.Request{NamespacedName: nsName}
 			result, err := reconciler.Reconcile(ctx, req)
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
-			Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
 		})
 
 		It("requeues deployment in next interval whose previous restart time is set in future", func() {
@@ -331,16 +332,18 @@ func getFlipperCR(name, matchnamespace string, requeueInterval time.Duration, la
 	}
 }
 
-func createTestDeployment(name, namespace, restartAt string, labels map[string]string) *appsv1.Deployment {
-	var annotations map[string]string
-	if restartAt != "" {
-		annotations = map[string]string{"kubectl.kubernetes.io/restartedAt": restartAt}
+func createTestDeployment(name, namespace, lastRestartAt string, labels map[string]string) *appsv1.Deployment {
+	var annotations, rolloutlastRestartAnnotation map[string]string
+	if lastRestartAt != "" {
+		annotations = map[string]string{"kubectl.kubernetes.io/restartedAt": lastRestartAt}
+		rolloutlastRestartAnnotation = map[string]string{rollout.RolloutLastRestartAnnotation: lastRestartAt}
 	}
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    labels,
+			Name:        name,
+			Namespace:   namespace,
+			Labels:      labels,
+			Annotations: rolloutlastRestartAnnotation,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
