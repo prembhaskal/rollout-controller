@@ -16,22 +16,23 @@ type MatchCriteria struct {
 }
 
 type FlipperConfig struct {
-	MatchLabel string
-	MatchValue string
+	MatchLabels map[string]string
+	// MatchValue string
 	Interval   time.Duration
 	Namespaces []string
 }
 
 func (f FlipperConfig) String() string {
-	return fmt.Sprintf("match label [%s:%s] every [%s]s in namespaces %v",
-		f.MatchLabel, f.MatchValue, f.Interval.String(), f.Namespaces)
+	return fmt.Sprintf("match labels [%v] every [%s] in namespaces %v",
+		f.MatchLabels, f.Interval.String(), f.Namespaces)
 }
 
 var defaultConfig = FlipperConfig{
-	MatchLabel: "mesh",
-	MatchValue: "true",
-	Interval:   10 * time.Minute,
-	Namespaces: []string{},
+	// MatchLabel: "mesh",
+	// MatchValue: "true",
+	MatchLabels: map[string]string{"mesh": "true"},
+	Interval:    10 * time.Minute,
+	Namespaces:  []string{},
 }
 
 func (m *MatchCriteria) Config() FlipperConfig {
@@ -52,18 +53,24 @@ func (m *MatchCriteria) UpdateConfig(flip *flipperiov1alpha1.Flipper) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// read only one value
-	var matchLabel, matchValue string
+	// // read only one value
+	// var matchLabel, matchValue string
+	// for k, v := range flip.Spec.Match.Labels {
+	// 	matchLabel, matchValue = k, v
+	// 	break
+	// }
+
+	matchLabels := make(map[string]string)
 	for k, v := range flip.Spec.Match.Labels {
-		matchLabel, matchValue = k, v
-		break
+		matchLabels[k] = v
 	}
 
 	m.config = &FlipperConfig{
-		MatchLabel: matchLabel,
-		MatchValue: matchValue,
-		Interval:   flip.Spec.Interval.Duration,
-		Namespaces: flip.Spec.Match.Namespaces,
+		// MatchLabel: matchLabel,
+		// MatchValue: matchValue,
+		MatchLabels: matchLabels,
+		Interval:    flip.Spec.Interval.Duration,
+		Namespaces:  flip.Spec.Match.Namespaces,
 	}
 }
 
@@ -75,17 +82,57 @@ func (m *MatchCriteria) DeleteConfig() {
 
 func (m *MatchCriteria) Matches(obj metav1.Object) bool {
 	cfg := m.Config()
-	if obj.GetLabels()[cfg.MatchLabel] != cfg.MatchValue {
+	// match all labels
+	if !matchLabels(obj.GetLabels(), cfg.MatchLabels) {
 		return false
 	}
+	// for k, v := range cfg.MatchLabels {
+	// 	if obj.GetLabels()[]
+	// }
+	// if obj.GetLabels()[cfg.MatchLabel] != cfg.MatchValue {
+	// 	return false
+	// }
 	// empty means we match all namespaces
-	if len(cfg.Namespaces) == 0 {
+	// if len(cfg.Namespaces) == 0 {
+	// 	return true
+	// }
+	// for _, ns := range cfg.Namespaces {
+	// 	if ns == obj.GetNamespace() {
+	// 		return true
+	// 	}
+	// }
+	if !matchNamespaces(obj.GetNamespace(), cfg.Namespaces) {
+		return false
+	}
+	return true
+}
+
+func matchNamespaces(act string, exp []string) bool {
+	// empty means we match all namespaces
+	if len(exp) == 0 {
 		return true
 	}
-	for _, ns := range cfg.Namespaces {
-		if ns == obj.GetNamespace() {
+	for _, ns := range exp {
+		if ns == act {
 			return true
 		}
 	}
 	return false
+}
+
+func matchLabels(act, exp map[string]string) bool {
+	// if no expected labels, then it matches everything.
+	if len(exp) == 0 {
+		return true
+	}
+	if len(act) == 0 {
+		return false
+	}
+	for k, v := range exp {
+		if act[k] != v {
+			return false
+		}
+	}
+
+	return true
 }

@@ -21,7 +21,7 @@
   `make install`
 
 ### Run locally
-- export KUBECONFIG=<Path to Config> or set in ~/kube/.config  
+- export KUBECONFIG=<Path-to-Config> or set in ~/kube/config  
   `make run`
 
 ### Build and push docker image
@@ -29,7 +29,7 @@
 - build docker image  
   `make docker-build`
   `make docker-build IMG=myregistry/myoperator:0.0.1`
-- push image to repo  
+- push image to repo, should docker login to repo before push  
   `make docker-push`
 
 ### Deploy the CRD and controller
