@@ -107,6 +107,7 @@ func (m *MatchCriteria) Matches(obj metav1.Object) bool {
 	return true
 }
 
+// return true if actual matches with any one of the expected namespaces
 func matchNamespaces(act string, exp []string) bool {
 	// empty means we match all namespaces
 	if len(exp) == 0 {
@@ -120,19 +121,17 @@ func matchNamespaces(act string, exp []string) bool {
 	return false
 }
 
+// return true if actual map has at least one matching entry from expected map
+// or if expected map is empty
 func matchLabels(act, exp map[string]string) bool {
 	// if no expected labels, then it matches everything.
 	if len(exp) == 0 {
 		return true
 	}
-	if len(act) == 0 {
-		return false
-	}
-	for k, v := range exp {
-		if act[k] != v {
-			return false
+	for k, v := range act {
+		if exp[k] == v {
+			return true
 		}
 	}
-
-	return true
+	return false
 }
