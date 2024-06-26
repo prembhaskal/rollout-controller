@@ -73,42 +73,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	// check if it is first seen by controller
-	// if rollout restart absent , update to now and requeueAfter interval
-	// rolloutLastRestart := getRolloutLastRestart(obj)
-	// if rolloutLastRestart == "" {
-	// 	err = r.updateRolloutLastRestartAnnotation(ctx, obj)
-	// 	if err != nil {
-	// 		logger.Error(err, "error adding rollout last restart annotation")
-	// 		return ctrl.Result{}, err
-	// 	}
-	// 	return ctrl.Result{RequeueAfter: cfg.Interval}, nil
-	// }
-
-	// // if rollout time present and invalid, fix it to now and requeueAfter interval
-	// lastRestarted, err := time.Parse(time.RFC3339, rolloutLastRestart)
-	// if err != nil {
-	// 	err = r.updateRolloutLastRestartAnnotation(ctx, obj)
-	// 	if err != nil {
-	// 		logger.Error(err, "error adding rollout restart annotation")
-	// 		return ctrl.Result{}, err
-	// 	}
-	// 	return ctrl.Result{RequeueAfter: cfg.Interval}, nil
-	// }
-
-	// currRestartTime := time.Now()
-	// expPrevRestart := currRestartTime.Add(-cfg.Interval)
-
-	// // exp ... last ... now
-	// if expPrevRestart.Before(lastRestarted) {
-	// 	nextInterval := max(cfg.Interval-lastRestarted.Sub(expPrevRestart), cfg.Interval)
-	// 	logger.Info("skipping as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
-	// 	return ctrl.Result{RequeueAfter: nextInterval}, nil
-	// }
-
 	currRestartTime := time.Now()
 	restartnow, result, err := r.shouldRestartNow(ctx, logger, obj, currRestartTime, cfg.Interval)
 	if !restartnow {
+		if err == nil {
+			logger.Info("skipping as restart not needed now, will be tried in nextInterval",
+				"nextInterval", result.RequeueAfter)
+		}
 		return result, err
 	}
 
@@ -149,20 +120,14 @@ func (r *Reconciler) updateRolloutLastRestartAnnotation(ctx context.Context, obj
 	return r.Patch(ctx, objcopy, client.MergeFrom(obj))
 }
 
-func (r *Reconciler) triggerRollout(ctx context.Context, obj *appsv1.Deployment, restartTime time.Time) error {
-	objCopy := obj.DeepCopy()
-	if objCopy.Spec.Template.ObjectMeta.Annotations == nil {
-		objCopy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
-	}
-	objCopy.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = restartTime.Format(time.RFC3339)
-	return r.Patch(ctx, objCopy, client.MergeFrom(obj))
-}
-
 // returns true if it should be restarted now.
 // return false and reconcile result with requeuAfter set if we cannot restart now
 // it also updates the rollout last restart annotation in case it was empty or previously set incorrectly.
 // it returns the error if update fails
-func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger, obj *appsv1.Deployment, currRestartTime time.Time, restartInterval time.Duration) (bool, ctrl.Result, error) {
+func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger,
+	obj *appsv1.Deployment, currRestartTime time.Time,
+	restartInterval time.Duration) (bool, ctrl.Result, error) {
+
 	// check if it is first seen by controller
 	// if rollout restart absent , update to now and requeueAfter interval
 	rolloutLastRestart := getRolloutLastRestart(obj)
@@ -186,9 +151,7 @@ func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger, o
 		return false, ctrl.Result{RequeueAfter: restartInterval}, nil
 	}
 
-	// currRestartTime := time.Now()
 	expPrevRestart := currRestartTime.Add(-restartInterval)
-
 	// exp ... now ... last (set in future)
 	if lastRestarted.After(currRestartTime) {
 		return false, ctrl.Result{RequeueAfter: restartInterval}, nil
@@ -196,7 +159,6 @@ func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger, o
 	// exp ... last ... now ... <next-int> ... nextRestart
 	if expPrevRestart.Before(lastRestarted) {
 		nextInterval := restartInterval - currRestartTime.Sub(lastRestarted)
-		logger.Info("skipping as restart not needed now, will be tried in nextInterval", "nextInterval", nextInterval)
 		return false, ctrl.Result{RequeueAfter: nextInterval}, nil
 	}
 
@@ -208,13 +170,6 @@ func getRolloutLastRestart(obj *appsv1.Deployment) string {
 		return ""
 	}
 	return obj.Annotations[RolloutLastRestartAnnotation]
-}
-
-func getRestartedAt(obj *appsv1.Deployment) string {
-	if obj.Spec.Template.ObjectMeta.Annotations == nil {
-		return ""
-	}
-	return obj.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"]
 }
 
 func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, obj client.Object) []reconcile.Request {
