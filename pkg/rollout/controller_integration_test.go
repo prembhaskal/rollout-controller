@@ -8,7 +8,6 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	// corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -213,36 +212,3 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 	})
 
 })
-
-// func createTestDeployment(name, namespace, restartAt string, labels map[string]string) *appsv1.Deployment {
-// 	var annotations map[string]string
-// 	if restartAt != "" {
-// 		annotations = map[string]string{"kubectl.kubernetes.io/restartedAt": restartAt}
-// 	}
-// 	return &appsv1.Deployment{
-// 		ObjectMeta: metav1.ObjectMeta{
-// 			Name:      name,
-// 			Namespace: namespace,
-// 			Labels:    labels,
-// 		},
-// 		Spec: appsv1.DeploymentSpec{
-// 			Selector: &metav1.LabelSelector{
-// 				MatchLabels: map[string]string{"foo": "bar"},
-// 			},
-// 			Template: corev1.PodTemplateSpec{
-// 				ObjectMeta: metav1.ObjectMeta{
-// 					Labels:      map[string]string{"foo": "bar"},
-// 					Annotations: annotations,
-// 				},
-// 				Spec: corev1.PodSpec{
-// 					Containers: []corev1.Container{
-// 						{
-// 							Name:  "nginx",
-// 							Image: "nginx",
-// 						},
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
-// }
