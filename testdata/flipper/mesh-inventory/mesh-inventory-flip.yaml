@@ -1,11 +1,11 @@
 apiVersion: flipper.io.github.com/v1alpha1
 kind: Flipper
 metadata:
-  name: nonmesh-flipper
+  name: mesh-flipper
 spec:
-  interval: 3m
+  interval: 2m
   match:
     labels:
-      mesh: "false"
+      mesh: "true"
     namespaces: 
-      - "payment"
+      - "inventory"

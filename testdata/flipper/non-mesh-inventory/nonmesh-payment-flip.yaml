@@ -3,9 +3,9 @@ kind: Flipper
 metadata:
   name: mesh-flipper
 spec:
-  interval: 5m
+  interval: 2m
   match:
     labels:
-      mesh: "true"
+      mesh: "false"
     namespaces: 
-      - "inventory"
+      - "payment"
