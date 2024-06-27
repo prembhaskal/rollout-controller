@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/pkg/api/flipper/v1alpha1"
 	"github.com/prembhaskal/rollout-controller/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -218,5 +219,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named("rolloutController").
 		Watches(&flipperiov1alpha1.Flipper{}, handler.EnqueueRequestsFromMapFunc(r.enqueueDeploymentsForCriteriaChange)).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 1,
+		}).
 		Complete(r)
 }
