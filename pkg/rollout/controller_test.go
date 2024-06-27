@@ -335,7 +335,7 @@ func getFlipperCR(name, matchnamespace string, requeueInterval time.Duration, la
 func createTestDeployment(name, namespace, lastRestartAt string, labels map[string]string) *appsv1.Deployment {
 	var annotations, rolloutlastRestartAnnotation map[string]string
 	if lastRestartAt != "" {
-		annotations = map[string]string{"kubectl.kubernetes.io/restartedAt": lastRestartAt}
+		annotations = map[string]string{rollout.RestartedAtAnnotation: lastRestartAt}
 		rolloutlastRestartAnnotation = map[string]string{rollout.RolloutLastRestartAnnotation: lastRestartAt}
 	}
 	return &appsv1.Deployment{
@@ -377,5 +377,5 @@ func getRestartedAt(obj *appsv1.Deployment) string {
 	if annotations == nil {
 		return ""
 	}
-	return annotations["kubectl.kubernetes.io/restartedAt"]
+	return annotations[rollout.RestartedAtAnnotation]
 }

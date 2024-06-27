@@ -20,9 +20,8 @@ type MatchCriteria struct {
 
 type FlipperConfig struct {
 	MatchLabels map[string]string
-	// MatchValue string
-	Interval   time.Duration
-	Namespaces []string
+	Interval    time.Duration
+	Namespaces  []string
 }
 
 func (f FlipperConfig) String() string {
@@ -48,7 +47,6 @@ func (m *MatchCriteria) Config() FlipperConfig {
 // LoadFlipperConfig read flipper CRs from cluster and uses one of that to update
 // the configuration for match criteria
 func (m *MatchCriteria) LoadFlipperConfig(restConfig *rest.Config) error {
-	// query and list existing flipper CR in system
 	client, err := flipperclient.NewForConfig(restConfig)
 	if err != nil {
 		return err
@@ -65,7 +63,7 @@ func (m *MatchCriteria) LoadFlipperConfig(restConfig *rest.Config) error {
 	return nil
 }
 
-// TODO should we validate here or in the flipper API itself.
+// TODO implement
 func (m *MatchCriteria) Validate(flip *flipperiov1alpha1.Flipper) error {
 	return nil
 }

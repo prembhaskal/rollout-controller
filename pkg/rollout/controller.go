@@ -20,7 +20,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-const RolloutLastRestartAnnotation = "flipper.io/rollout-last-restart"
+const (
+	RolloutLastRestartAnnotation = "flipper.io/rollout-last-restart"
+	RestartedAtAnnotation        = "kubectl.kubernetes.io/restartedAt"
+)
 
 var _ reconcile.Reconciler = &Reconciler{}
 
@@ -100,7 +103,7 @@ func (r *Reconciler) dotriggerRollout(ctx context.Context, obj *appsv1.Deploymen
 	if objcopy.Spec.Template.ObjectMeta.Annotations == nil {
 		objcopy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
 	}
-	objcopy.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = restartTimeFormatted
+	objcopy.Spec.Template.ObjectMeta.Annotations[RestartedAtAnnotation] = restartTimeFormatted
 
 	if objcopy.Annotations == nil {
 		objcopy.Annotations = make(map[string]string)
@@ -129,7 +132,7 @@ func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger,
 	restartInterval time.Duration) (bool, ctrl.Result, error) {
 
 	// check if it is first seen by controller
-	// if rollout restart absent , update to now and requeueAfter interval
+	// if rollout restart absent , update to now and requeue for next interval
 	rolloutLastRestart := getRolloutLastRestart(obj)
 	if rolloutLastRestart == "" {
 		err := r.updateRolloutLastRestartAnnotation(ctx, obj)
@@ -140,7 +143,7 @@ func (r *Reconciler) shouldRestartNow(ctx context.Context, logger logr.Logger,
 		return false, ctrl.Result{RequeueAfter: restartInterval}, nil
 	}
 
-	// if rollout time present and invalid, fix it to now and requeueAfter interval
+	// if rollout time present and invalid, fix it to now and requeue for next interval
 	lastRestarted, err := time.Parse(time.RFC3339, rolloutLastRestart)
 	if err != nil {
 		err = r.updateRolloutLastRestartAnnotation(ctx, obj)
@@ -186,17 +189,11 @@ func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, ob
 	requests := make([]reconcile.Request, 0)
 	for _, depl := range allDepls.Items {
 		requests = append(requests, reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      depl.Name,
-				Namespace: depl.Namespace,
-			},
+			NamespacedName: types.NamespacedName{Name: depl.Name, Namespace: depl.Namespace},
 		})
 	}
 
-	nsName := types.NamespacedName{
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
-	}
+	nsName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 	var flipper flipperiov1alpha1.Flipper
 	err = r.Get(ctx, nsName, &flipper)
 	if err != nil {
