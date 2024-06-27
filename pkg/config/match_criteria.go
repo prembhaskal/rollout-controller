@@ -7,7 +7,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
+	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/pkg/api/v1alpha1"
 )
 
 type MatchCriteria struct {
@@ -28,8 +28,6 @@ func (f FlipperConfig) String() string {
 }
 
 var defaultConfig = FlipperConfig{
-	// MatchLabel: "mesh",
-	// MatchValue: "true",
 	MatchLabels: map[string]string{"mesh": "true"},
 	Interval:    10 * time.Minute,
 	Namespaces:  []string{},
@@ -53,21 +51,12 @@ func (m *MatchCriteria) UpdateConfig(flip *flipperiov1alpha1.Flipper) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// // read only one value
-	// var matchLabel, matchValue string
-	// for k, v := range flip.Spec.Match.Labels {
-	// 	matchLabel, matchValue = k, v
-	// 	break
-	// }
-
 	matchLabels := make(map[string]string)
 	for k, v := range flip.Spec.Match.Labels {
 		matchLabels[k] = v
 	}
 
 	m.config = &FlipperConfig{
-		// MatchLabel: matchLabel,
-		// MatchValue: matchValue,
 		MatchLabels: matchLabels,
 		Interval:    flip.Spec.Interval.Duration,
 		Namespaces:  flip.Spec.Match.Namespaces,
@@ -86,21 +75,6 @@ func (m *MatchCriteria) Matches(obj metav1.Object) bool {
 	if !matchLabels(obj.GetLabels(), cfg.MatchLabels) {
 		return false
 	}
-	// for k, v := range cfg.MatchLabels {
-	// 	if obj.GetLabels()[]
-	// }
-	// if obj.GetLabels()[cfg.MatchLabel] != cfg.MatchValue {
-	// 	return false
-	// }
-	// empty means we match all namespaces
-	// if len(cfg.Namespaces) == 0 {
-	// 	return true
-	// }
-	// for _, ns := range cfg.Namespaces {
-	// 	if ns == obj.GetNamespace() {
-	// 		return true
-	// 	}
-	// }
 	if !matchNamespaces(obj.GetNamespace(), cfg.Namespaces) {
 		return false
 	}

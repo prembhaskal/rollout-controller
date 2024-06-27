@@ -15,7 +15,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/api/v1alpha1"
+	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/pkg/api/v1alpha1"
 	"github.com/prembhaskal/rollout-controller/pkg/config"
 	rollout "github.com/prembhaskal/rollout-controller/pkg/rollout"
 )
