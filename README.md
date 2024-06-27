@@ -16,6 +16,7 @@
 - At a time only one flipper CR will be used to determine the configuration for controller. Controller does not give error when multiple flipper CRs are deployed, it will consider any one of the CR for updating configuration.
 
 ## Design and Implementation
+![Rollout-Controller](./rollout.jpg)
 - The Rollout controller is based on controller-runtime based controller and scaffolding code was generated using  [kubebuilder-quick-start](https://book.kubebuilder.io/quick-start).
 - It primarily watches the Deployment objects in cluster and triggers rollout restart if they match the matching configuration.
 - Rollout restart is done by updating the field `obj.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"]` and setting a new timestamp. This causes deployment to trigger a rolling restart of all pods. This is similar to what `kubectl rollout restart deployment...` command does.

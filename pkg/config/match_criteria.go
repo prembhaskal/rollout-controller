@@ -57,7 +57,7 @@ func (m *MatchCriteria) LoadFlipperConfig(restConfig *rest.Config) error {
 	if err != nil {
 		return err
 	}
-	if len(flipperCRs.Items) > 0 {
+	if len(flipperCRs.Items) == 0 {
 		return nil
 	}
 	// read the first one
