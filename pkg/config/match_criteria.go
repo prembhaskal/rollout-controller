@@ -53,7 +53,7 @@ func (m *MatchCriteria) LoadFlipperConfig(restConfig *rest.Config) error {
 	if err != nil {
 		return err
 	}
-	flipperCRs, err := client.FlipperV1alpha1().Flippers("").List(context.Background())
+	flipperCRs, err := client.FlipperV1alpha1().Flippers("").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

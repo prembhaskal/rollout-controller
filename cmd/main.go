@@ -130,7 +130,7 @@ func main() {
 		setupLog.Error(err, "unable to load initial flipper config")
 		os.Exit(1)
 	}
-	
+
 	rolloutReconciler := rollout.New(mgr.GetClient(), matchCriteria)
 	if err = rolloutReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create rollout controller")
