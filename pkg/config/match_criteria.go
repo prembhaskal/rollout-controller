@@ -1,13 +1,16 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 
-	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/pkg/api/v1alpha1"
+	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/pkg/api/flipper/v1alpha1"
+	flipperclient "github.com/prembhaskal/rollout-controller/pkg/client/versioned"
 )
 
 type MatchCriteria struct {
@@ -40,6 +43,26 @@ func (m *MatchCriteria) Config() FlipperConfig {
 		return defaultConfig
 	}
 	return *m.config
+}
+
+// LoadFlipperConfig read flipper CRs from cluster and uses one of that to update
+// the configuration for match criteria
+func (m *MatchCriteria) LoadFlipperConfig(restConfig *rest.Config) error {
+	// query and list existing flipper CR in system
+	client, err := flipperclient.NewForConfig(restConfig)
+	if err != nil {
+		return err
+	}
+	flipperCRs, err := client.FlipperV1alpha1().Flippers("").List(context.Background())
+	if err != nil {
+		return err
+	}
+	if len(flipperCRs.Items) > 0 {
+		return nil
+	}
+	// read the first one
+	m.UpdateConfig(&flipperCRs.Items[0])
+	return nil
 }
 
 // TODO should we validate here or in the flipper API itself.

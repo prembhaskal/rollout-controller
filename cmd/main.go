@@ -34,7 +34,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/pkg/api/v1alpha1"
+	flipperiov1alpha1 "github.com/prembhaskal/rollout-controller/pkg/api/flipper/v1alpha1"
 	// +kubebuilder:scaffold:imports
 	"github.com/prembhaskal/rollout-controller/pkg/config"
 	"github.com/prembhaskal/rollout-controller/pkg/rollout"
@@ -95,7 +95,8 @@ func main() {
 		TLSOpts: tlsOpts,
 	})
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	restConfig := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress:   metricsAddr,
@@ -124,9 +125,15 @@ func main() {
 	}
 
 	matchCriteria := &config.MatchCriteria{}
+	err = matchCriteria.LoadFlipperConfig(restConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to load initial flipper config")
+		os.Exit(1)
+	}
+	
 	rolloutReconciler := rollout.New(mgr.GetClient(), matchCriteria)
 	if err = rolloutReconciler.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create rollout controller", "controller", "Rollout")
+		setupLog.Error(err, "unable to create rollout controller")
 		os.Exit(1)
 	}
 
