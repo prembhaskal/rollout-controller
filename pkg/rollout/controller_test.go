@@ -33,8 +33,10 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 	// setup fake client with needed parameters
 	client := createFakeClient()
 	// setup default match criteria (or read from somewhere)
-	matchCriteria := &config.MatchCriteria{}
+	matchCriteria := config.NewMatchCriteria()
 	reconciler := rollout.New(client, matchCriteria)
+
+	const defaultInterval = 10 * time.Minute
 
 	var depObject *appsv1.Deployment
 
@@ -85,7 +87,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(restartedAt).ToNot(Equal(previousRestart))
 
-			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
+			Expect(result.RequeueAfter).To(Equal(defaultInterval))
 		})
 
 		It("Does not Restart Fresh Deployment immediately", func() {
@@ -108,7 +110,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			restartedAt := getRestartedAt(&obj)
 			Expect(restartedAt).To(BeEmpty())
 
-			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
+			Expect(result.RequeueAfter).To(Equal(defaultInterval))
 		})
 
 		It("Does not Restart Deployment previously restarted in current interval", func() {
@@ -137,7 +139,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 
 			// restart after around 10-2=8 mins so < 10mins.
 			GinkgoWriter.Printf("requeue After: %d", result.RequeueAfter)
-			Expect(result.RequeueAfter < matchCriteria.Config().Interval).To(BeTrue())
+			Expect(result.RequeueAfter < defaultInterval).To(BeTrue())
 		})
 
 		It("handles improperly formatted lastRestart time", func() {
@@ -156,7 +158,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			result, err := reconciler.Reconcile(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
+			Expect(result.RequeueAfter).To(Equal(defaultInterval))
 		})
 
 		It("requeues deployment in next interval whose previous restart time is set in future", func() {
@@ -183,7 +185,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			restartedAt := getRestartedAt(&obj)
 			Expect(restartedAt).To(Equal(prevRestartStr))
 
-			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
+			Expect(result.RequeueAfter).To(Equal(defaultInterval))
 
 		})
 	})
@@ -215,12 +217,14 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 	})
 
 	Context("Updated Flipper Config", func() {
+		const flipperName = "foo-flipper"
+		var newFlipperCR *flipperiov1alpha1.Flipper
 		BeforeEach(func() {
-			newFlipperCR := getFlipperCR("foo-flipper", "service", 3*time.Minute, map[string]string{"foo": "bar"})
+			newFlipperCR = getFlipperCR(flipperName, "service", 3*time.Minute, map[string]string{"foo": "bar"})
 			matchCriteria.UpdateConfig(newFlipperCR)
 		})
 		AfterEach(func() {
-			matchCriteria.DeleteConfig()
+			matchCriteria.DeleteConfig(flipperName)
 		})
 		It("matches new labels", func() {
 			// create a deployment matching the default criteria
@@ -247,7 +251,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 			_, err = time.Parse(time.RFC3339, restartedAt)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(result.RequeueAfter).To(Equal(matchCriteria.Config().Interval))
+			Expect(result.RequeueAfter).To(Equal(newFlipperCR.Spec.Interval.Duration))
 		})
 
 		It("ignores deployment in different namespace", func() {

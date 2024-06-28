@@ -25,7 +25,7 @@ var _ = Describe("Flipper Controller", Ordered, func() {
 	const waitTime = 15 * time.Second
 	const pollTime = 3 * time.Second
 
-	matchCriteria := &config.MatchCriteria{}
+	matchCriteria := config.NewMatchCriteria()
 	ctx := context.Background()
 
 	BeforeAll(func() {

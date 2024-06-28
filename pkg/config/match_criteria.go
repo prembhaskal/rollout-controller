@@ -13,12 +13,8 @@ import (
 	flipperclient "github.com/prembhaskal/rollout-controller/pkg/client/versioned"
 )
 
-type MatchCriteria struct {
-	config *FlipperConfig
-	mu     sync.Mutex
-}
-
 type FlipperConfig struct {
+	Name        string
 	MatchLabels map[string]string
 	Interval    time.Duration
 	Namespaces  []string
@@ -29,19 +25,34 @@ func (f FlipperConfig) String() string {
 		f.MatchLabels, f.Interval.String(), f.Namespaces)
 }
 
+func (f *FlipperConfig) Matches(obj metav1.Object) bool {
+	// match all labels
+	if !matchLabels(obj.GetLabels(), f.MatchLabels) {
+		return false
+	}
+	if !matchNamespaces(obj.GetNamespace(), f.Namespaces) {
+		return false
+	}
+	return true
+}
+
 var defaultConfig = FlipperConfig{
+	Name:        "_default_",
 	MatchLabels: map[string]string{"mesh": "true"},
 	Interval:    10 * time.Minute,
 	Namespaces:  []string{},
 }
 
-func (m *MatchCriteria) Config() FlipperConfig {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.config == nil {
-		return defaultConfig
+type MatchCriteria struct {
+	config  *FlipperConfig
+	configs map[string]*FlipperConfig
+	mu      sync.Mutex
+}
+
+func NewMatchCriteria() *MatchCriteria {
+	return &MatchCriteria{
+		configs: make(map[string]*FlipperConfig),
 	}
-	return *m.config
 }
 
 // LoadFlipperConfig read flipper CRs from cluster and uses one of that to update
@@ -77,29 +88,42 @@ func (m *MatchCriteria) UpdateConfig(flip *flipperiov1alpha1.Flipper) {
 		matchLabels[k] = v
 	}
 
-	m.config = &FlipperConfig{
+	config := &FlipperConfig{
+		Name:        flip.Name,
 		MatchLabels: matchLabels,
 		Interval:    flip.Spec.Interval.Duration,
 		Namespaces:  flip.Spec.Match.Namespaces,
 	}
+
+	m.configs[flip.Name] = config
 }
 
-func (m *MatchCriteria) DeleteConfig() {
+func (m *MatchCriteria) DeleteConfig(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.config = nil
+
+	delete(m.configs, name)
 }
 
-func (m *MatchCriteria) Matches(obj metav1.Object) bool {
-	cfg := m.Config()
-	// match all labels
-	if !matchLabels(obj.GetLabels(), cfg.MatchLabels) {
-		return false
+// returns copy of the matching config and true
+// if no configs are present, it returns the defaultConfig if it matches the object
+// returns zeroed flipperconfig and false, if no existing configuration match
+func (m *MatchCriteria) MatchingConfig(obj metav1.Object) (FlipperConfig, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(m.configs) == 0 {
+		if defaultConfig.Matches(obj) {
+			return defaultConfig, true
+		}
 	}
-	if !matchNamespaces(obj.GetNamespace(), cfg.Namespaces) {
-		return false
+
+	for _, cfg := range m.configs {
+		if cfg.Matches(obj) {
+			return *cfg, true
+		}
 	}
-	return true
+	return FlipperConfig{}, false
 }
 
 // return true if actual matches with any one of the expected namespaces

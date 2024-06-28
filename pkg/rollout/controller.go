@@ -69,10 +69,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	cfg := r.matchCriteria.Config()
-	logger.V(2).Info("using", "matching config", cfg)
-
-	if !r.matchCriteria.Matches(obj) {
+	cfg, match := r.matchCriteria.MatchingConfig(obj)
+	if !match {
 		logger.Info("ignoring non matching deployment")
 		return ctrl.Result{}, nil
 	}
@@ -200,7 +198,7 @@ func (r *Reconciler) enqueueDeploymentsForCriteriaChange(ctx context.Context, ob
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("deleted matching criteria config")
-			r.matchCriteria.DeleteConfig()
+			r.matchCriteria.DeleteConfig(obj.GetName())
 			return requests
 		}
 		logger.Error(err, "error in getting flipper configuration")

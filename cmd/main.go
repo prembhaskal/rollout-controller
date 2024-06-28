@@ -95,7 +95,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	matchCriteria := &config.MatchCriteria{}
+	matchCriteria := config.NewMatchCriteria()
 	err = matchCriteria.LoadFlipperConfig(restConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to load initial flipper config")
